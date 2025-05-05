@@ -1,13 +1,16 @@
-package db_connections
+package connections
 
 import (
 	"context"
 	"fmt"
+
 	"golang/internal/infrastructure/config"
 
 	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
-	
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 
@@ -19,7 +22,7 @@ func runMigrations(url string) error {
 	}
 
 	if err := migration.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to run up migrations")
+		return fmt.Errorf("failed to run up migrations: %w", err)
 	}
 
 	defer migration.Close()

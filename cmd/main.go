@@ -10,7 +10,7 @@ import (
 
 
 func main() {
-	db, err := db_connections.NewPostgresConnection()
+	db, err := connections.NewPostgresConnection()
 	if err != nil {
 		log.Fatal(err)
 	}

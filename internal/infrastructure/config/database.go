@@ -31,16 +31,16 @@ func (cfg *DatabaseConfig) ConnectionString() string {
 
 
 func LoadDatabaseConfig() (*DatabaseConfig, error) {
-	if err := godotenv.Load("../.env"); err != nil {
-		return nil, fmt.Errorf("failed load .env")
+	if err := godotenv.Load(); err != nil {
+		return nil, fmt.Errorf("failed load .env %w", err)
 	}
 	port, _ := strconv.Atoi(os.Getenv("DB_PORT"))
 
 	return &DatabaseConfig{
-		Host:     os.Getenv("POSTGRES_HOST"),
+		Host:     os.Getenv("DB_HOST"),
 		Port:     port,
-		User:     os.Getenv("POSTGRES_USER"),
-		Password: os.Getenv("POSTGRES_PASSWORD"),
-		DBName:   os.Getenv("POSTGRES_DB"),
+		User:     os.Getenv("DB_USER"),
+		Password: os.Getenv("DB_PASS"),
+		DBName:   os.Getenv("DB_NAME"),
 	}, nil
 }
