@@ -1,0 +1,46 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+
+	"github.com/joho/godotenv"
+)
+
+
+type DatabaseConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+}
+
+
+func (cfg *DatabaseConfig) ConnectionString() string {
+    return fmt.Sprintf(
+        "postgres://%s:%s@%s:%d/%s?sslmode=disable",
+        cfg.User,
+        cfg.Password,
+        cfg.Host,
+        cfg.Port,
+        cfg.DBName,
+    )
+}
+
+
+func LoadDatabaseConfig() (*DatabaseConfig, error) {
+	if err := godotenv.Load("../.env"); err != nil {
+		return nil, fmt.Errorf("failed load .env")
+	}
+	port, _ := strconv.Atoi(os.Getenv("DB_PORT"))
+
+	return &DatabaseConfig{
+		Host:     os.Getenv("POSTGRES_HOST"),
+		Port:     port,
+		User:     os.Getenv("POSTGRES_USER"),
+		Password: os.Getenv("POSTGRES_PASSWORD"),
+		DBName:   os.Getenv("POSTGRES_DB"),
+	}, nil
+}
