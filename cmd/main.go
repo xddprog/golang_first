@@ -17,8 +17,11 @@ func main() {
 
 	server := http.NewServeMux()
 
-	userHandler, err := setup.InitNewHandler(&handlers.UserHandler{}, db)
+	userHandler, _ := setup.InitNewHandler(&handlers.UserHandler{}, db)
+	authHandler, _ := setup.InitNewHandler(&handlers.AuthHandler{}, db)
+	
 	userHandler.SetupRoutes(server, "/api/v1")
-
+	authHandler.SetupRoutes(server, "/api/v1")
+	
 	http.ListenAndServe("localhost:8000", server)
 }

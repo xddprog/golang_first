@@ -33,6 +33,8 @@ var (
 	ErrInvalidRequestBody = APIError{Code: http.StatusBadRequest, Message: "invalid request body"}
 	ErrEncodingError = APIError{Code: http.StatusInternalServerError, Message: "encoding error"}
 	ErrValidationError = APIError{Code: http.StatusBadRequest, Message: "validation error"}
+	ErrInvalidToken = APIError{Code: http.StatusUnauthorized, Message: "invalid token"}
+	ErrInvaliLoginData = APIError{Code: http.StatusUnauthorized, Message: "invalid logon data"}
 )
 
 
