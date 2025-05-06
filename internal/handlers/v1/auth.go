@@ -48,6 +48,7 @@ func (handler *AuthHandler) GetCurrentUser(response http.ResponseWriter, request
 
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
+		return
 	}
 	
 	if err := json.NewEncoder(response).Encode(user); err != nil {
@@ -65,6 +66,7 @@ func (handler *AuthHandler) RefreshToken(response http.ResponseWriter, request *
 
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
+		return 
 	}
 
 	if err := json.NewEncoder(response).Encode(user); err != nil {
