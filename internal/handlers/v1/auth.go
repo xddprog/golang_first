@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"golang/internal/core/services"
+	deps "golang/internal/handlers/dependencies"
 	"golang/internal/infrastructure/database/models"
 	"golang/internal/infrastructure/errors"
 	"net/http"
@@ -16,14 +17,7 @@ type AuthHandler struct {
 
 
 func (handler *AuthHandler) RegisterUser(response http.ResponseWriter, request *http.Request) {
-	var userForm models.CreateUserModel
-	err := json.NewDecoder(request.Body).Decode(&userForm)
-	if err != nil {
-		apierrors.WriteHTTPError(response, err)
-		return
-	}
-
-	user, serviceErr := handler.Service.RegisterUser(request.Context(), userForm)
+	user, serviceErr := handler.Service.RegisterUser(request.Context(), request.Body)
 	if serviceErr != nil {
 		apierrors.WriteHTTPError(response, serviceErr)
 		return
@@ -97,7 +91,7 @@ func (handler *AuthHandler) LoginUser(response http.ResponseWriter, request *htt
 }
 
 
-func (handler *AuthHandler) SetupRoutes(server *http.ServeMux, baseUrl string) {
+func (handler *AuthHandler) SetupRoutes(server *http.ServeMux, baseUrl string, protected *deps.AuthDependency) {
 	server.HandleFunc(baseUrl+"/auth/register", handler.RegisterUser)
 	server.HandleFunc(baseUrl+"/auth/login", handler.LoginUser)
 	server.HandleFunc(baseUrl+"/auth/refresh", handler.RefreshToken)

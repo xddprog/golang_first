@@ -6,17 +6,13 @@ import (
 	"golang/internal/core/services"
 	"golang/internal/handlers/v1"
 	"golang/internal/infrastructure/config"
-	"net/http"
+	"golang/internal/infrastructure/interfaces"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type HandlerInterface interface {
-	SetupRoutes(server *http.ServeMux, baseUrl string)
-}
 
-
-func InitNewHandler[T HandlerInterface](emptyHandler T, db *pgxpool.Pool) (T, error) {
+func InitNewHandler[T interfaces.HandlerInterface](emptyHandler T, db *pgxpool.Pool) (T, error) {
 	switch h := any(emptyHandler).(type) {
 	case *handlers.UserHandler:
 		repository := &repositories.UserRepository{DB: db}

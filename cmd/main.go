@@ -1,6 +1,7 @@
 package main
 
 import (
+	"golang/internal/handlers/dependencies"
 	"golang/internal/handlers/setup"
 	"golang/internal/handlers/v1"
 	"golang/internal/infrastructure/database/connections"
@@ -17,11 +18,14 @@ func main() {
 
 	server := http.NewServeMux()
 
+
 	userHandler, _ := setup.InitNewHandler(&handlers.UserHandler{}, db)
 	authHandler, _ := setup.InitNewHandler(&handlers.AuthHandler{}, db)
 	
-	userHandler.SetupRoutes(server, "/api/v1")
-	authHandler.SetupRoutes(server, "/api/v1")
+	authDependency := deps.NewAuthDependency(authHandler.Service)
+
+	userHandler.SetupRoutes(server, "/api/v1", authDependency)
+	authHandler.SetupRoutes(server, "/api/v1", authDependency)
 	
 	http.ListenAndServe("localhost:8000", server)
 }

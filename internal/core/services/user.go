@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"golang/internal/core/repositories"
 	"golang/internal/infrastructure/database/models"
 	"golang/internal/infrastructure/errors"
+	"io"
 )
 
 
@@ -20,4 +22,29 @@ func (s *UserService) GetUserById(ctx context.Context, userId int) (*models.User
 		return nil, apierrors.CheckDBError(err) 
 	}
 	return user, nil
+}
+
+
+func (s *UserService) UpdateUser(ctx context.Context, userId int, userForm io.ReadCloser) (*models.UserModel, *apierrors.APIError) {
+	var userFormEncoded models.UpdateUserModel
+	err := json.NewDecoder(userForm).Decode(&userFormEncoded)
+
+	if err != nil {
+		return nil, &apierrors.ErrInvalidRequestBody
+	}
+	
+	user, err := s.Repository.UpdateUser(ctx, userId, userFormEncoded)
+	if err != nil {
+		return nil, apierrors.CheckDBError(err) 
+	}
+	return user, nil
+}
+
+
+func (s *UserService) DeleteUser(ctx context.Context, userId int) *apierrors.APIError {
+	err := s.Repository.DeleteUser(ctx, userId)
+	if err != nil {
+		return apierrors.CheckDBError(err) 
+	}
+	return nil
 }
