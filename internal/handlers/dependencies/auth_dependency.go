@@ -12,6 +12,8 @@ import (
 type AuthenticatedHandlerFunc func(w http.ResponseWriter, r *http.Request, user *models.UserModel)
 
 
+
+
 type AuthDependency struct {
     Service *services.AuthService
 }

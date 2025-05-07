@@ -1,4 +1,4 @@
-package interfaces
+package types
 
 import (
 	deps "golang/internal/handlers/dependencies"
@@ -9,3 +9,5 @@ import (
 type HandlerInterface interface {
 	SetupRoutes(server *http.ServeMux, baseUrl string, protected *deps.AuthDependency)
 }
+
+

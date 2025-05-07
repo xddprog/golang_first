@@ -6,13 +6,13 @@ import (
 	"golang/internal/core/services"
 	"golang/internal/handlers/v1"
 	"golang/internal/infrastructure/config"
-	"golang/internal/infrastructure/interfaces"
+	"golang/internal/infrastructure/types"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 
-func InitNewHandler[T interfaces.HandlerInterface](emptyHandler T, db *pgxpool.Pool) (T, error) {
+func InitNewHandler[T types.HandlerInterface](emptyHandler T, db *pgxpool.Pool) (T, error) {
 	switch h := any(emptyHandler).(type) {
 	case *handlers.UserHandler:
 		repository := &repositories.UserRepository{DB: db}
