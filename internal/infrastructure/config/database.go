@@ -18,6 +18,7 @@ type DatabaseConfig struct {
 }
 
 
+
 func (cfg *DatabaseConfig) ConnectionString() string {
     return fmt.Sprintf(
         "postgres://%s:%s@%s:%d/%s?sslmode=disable",
@@ -32,7 +33,7 @@ func (cfg *DatabaseConfig) ConnectionString() string {
 
 func LoadDatabaseConfig() (*DatabaseConfig, error) {
 	if err := godotenv.Load(); err != nil {
-		return nil, fmt.Errorf("failed load .env %w", err)
+		panic("failed to load .env file")
 	}
 	port, _ := strconv.Atoi(os.Getenv("DB_PORT"))
 
@@ -44,3 +45,4 @@ func LoadDatabaseConfig() (*DatabaseConfig, error) {
 		DBName:   os.Getenv("DB_NAME"),
 	}, nil
 }
+
