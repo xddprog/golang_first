@@ -21,6 +21,10 @@ func runMigrations(url string) error {
 		return fmt.Errorf("failed to initialize migrations: %w", err)
 	}
 
+	// if err := migration.Down(); err != nil && err != migrate.ErrNoChange {
+	// 	return fmt.Errorf("failed to run down migrations: %w", err)
+	// }
+
 	if err := migration.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run up migrations: %w", err)
 	}

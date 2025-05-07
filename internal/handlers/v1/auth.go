@@ -38,7 +38,6 @@ func (handler *AuthHandler) GetCurrentUser(response http.ResponseWriter, request
 	user, err := handler.Service.ValidateToken(request.Context(), tokenString)
 
 	response.Header().Set("Content-Type", "application/json")
-	response.WriteHeader(http.StatusAccepted)
 
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)

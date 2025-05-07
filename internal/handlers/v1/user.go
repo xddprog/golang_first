@@ -23,16 +23,16 @@ func (handler *UserHandler) GetUserById(response http.ResponseWriter, request *h
 		return
 	}
 
-	user, serviceErr := handler.Service.GetUserById(request.Context(), userId)
+	userGet, serviceErr := handler.Service.GetUserById(request.Context(), userId)
 	if serviceErr != nil {
-		apierrors.WriteHTTPError(response, err)
+		apierrors.WriteHTTPError(response, serviceErr)
 		return
 	}
 
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(response).Encode(user); err != nil {
+	if err := json.NewEncoder(response).Encode(userGet); err != nil {
 		http.Error(response, "Encoding error", http.StatusInternalServerError)
 	}
 }
@@ -70,6 +70,6 @@ func (handler *UserHandler) DeleteUser(response http.ResponseWriter, request *ht
 
 func (handler *UserHandler) SetupRoutes(server *http.ServeMux, baseUrl string, d *deps.AuthDependency) {
 	server.HandleFunc("GET " + baseUrl+ "/user/{id}", d.Protected(handler.GetUserById))
-	server.HandleFunc("PUT " + baseUrl + "/user/{id}", d.Protected(handler.UpdateUser))
-	server.HandleFunc("DELETE " + baseUrl + "/user/{id}", d.Protected(handler.DeleteUser))
+	server.HandleFunc("PUT " + baseUrl + "/user", d.Protected(handler.UpdateUser))
+	server.HandleFunc("DELETE " + baseUrl + "/user", d.Protected(handler.DeleteUser))
 }

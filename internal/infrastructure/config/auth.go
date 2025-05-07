@@ -36,7 +36,7 @@ func LoadJwtConfig() (*JwtConfig, error){
 	return &JwtConfig{
 		Secret: os.Getenv("JWT_SECRET"),
 		SigningMethod: jwt.GetSigningMethod(os.Getenv("JWT_SIGNING_METHOD")),
-		RefreshTokenTime: time.Duration(refreshTokenTime),
-		AccessTokenTime: time.Duration(accessTokenTime),
+		RefreshTokenTime: time.Duration(refreshTokenTime) * time.Hour * 24 * 7,
+		AccessTokenTime: time.Duration(accessTokenTime) * time.Minute,
 	}, nil
 }
