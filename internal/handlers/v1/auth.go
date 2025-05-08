@@ -3,8 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"golang/internal/core/services"
-	deps "golang/internal/handlers/dependencies"
-	"golang/internal/infrastructure/database/models"
+	"golang/internal/handlers/dependencies"
 	"golang/internal/infrastructure/errors"
 	"net/http"
 	"strings"
@@ -17,13 +16,14 @@ type AuthHandler struct {
 
 
 func (handler *AuthHandler) RegisterUser(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+
 	user, serviceErr := handler.Service.RegisterUser(request.Context(), request.Body)
 	if serviceErr != nil {
 		apierrors.WriteHTTPError(response, serviceErr)
 		return
 	}
 
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(response).Encode(user); err != nil {
 		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
@@ -32,13 +32,12 @@ func (handler *AuthHandler) RegisterUser(response http.ResponseWriter, request *
 
 
 func (handler *AuthHandler) GetCurrentUser(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+
 	authHeader := request.Header.Get("Authorization")
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
 	user, err := handler.Service.ValidateToken(request.Context(), tokenString)
-
-	response.Header().Set("Content-Type", "application/json")
-
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
 		return
@@ -51,10 +50,11 @@ func (handler *AuthHandler) GetCurrentUser(response http.ResponseWriter, request
 
 
 func (handler *AuthHandler) RefreshToken(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+
 	refreshToken := request.URL.Query().Get("refresh_token")
 	user, err := handler.Service.RefreshToken(request.Context(), refreshToken)
 
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusAccepted)
 
 	if err != nil {
@@ -69,20 +69,14 @@ func (handler *AuthHandler) RefreshToken(response http.ResponseWriter, request *
 
 
 func (handler *AuthHandler) LoginUser(response http.ResponseWriter, request *http.Request) {
-	var userForm models.LoginUserModel
-	err := json.NewDecoder(request.Body).Decode(&userForm)
-	if err != nil {
-		apierrors.WriteHTTPError(response, err)
-		return
-	}
+	response.Header().Set("Content-Type", "application/json")
 
-	user, serviceErr := handler.Service.LoginUser(request.Context(), userForm)
+	user, serviceErr := handler.Service.LoginUser(request.Context(), request.Body)
 	if serviceErr != nil {
 		apierrors.WriteHTTPError(response, serviceErr)
 		return
 	}
 
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusAccepted)
 	if err := json.NewEncoder(response).Encode(user); err != nil {
 		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)

@@ -6,6 +6,7 @@ import (
 	"golang/internal/core/repositories"
 	"golang/internal/infrastructure/database/models"
 	"golang/internal/infrastructure/errors"
+	"golang/internal/utils"
 	"io"
 )
 
@@ -27,10 +28,13 @@ func (s *UserService) GetUserById(ctx context.Context, userId int) (*models.User
 
 func (s *UserService) UpdateUser(ctx context.Context, userId int, userForm io.ReadCloser) (*models.UserModel, *apierrors.APIError) {
 	var userFormEncoded models.UpdateUserModel
-	err := json.NewDecoder(userForm).Decode(&userFormEncoded)
 
-	if err != nil {
+	if err := json.NewDecoder(userForm).Decode(&userFormEncoded); err != nil {
 		return nil, &apierrors.ErrInvalidRequestBody
+	}
+
+	if err := utils.ValidateForm(userFormEncoded); err != nil {
+		return nil, err
 	}
 	
 	user, err := s.Repository.UpdateUser(ctx, userId, userFormEncoded)

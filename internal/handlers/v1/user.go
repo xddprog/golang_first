@@ -17,6 +17,8 @@ type UserHandler struct {
 
 
 func (handler *UserHandler) GetUserById(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
 	userId, err := strconv.Atoi(request.PathValue("id"))
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
@@ -29,39 +31,39 @@ func (handler *UserHandler) GetUserById(response http.ResponseWriter, request *h
 		return
 	}
 
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(response).Encode(userGet); err != nil {
-		http.Error(response, "Encoding error", http.StatusInternalServerError)
+		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
 	}
 }
 
 
 func (handler *UserHandler) UpdateUser(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
 	user, err := handler.Service.UpdateUser(request.Context(), user.Id, request.Body)
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
 		return
 	}
 
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-
 	if err := json.NewEncoder(response).Encode(user); err != nil {
-		http.Error(response, "Encoding error", http.StatusInternalServerError)
+		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
 	}
 }
 
 
 func (handler *UserHandler) DeleteUser(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
 	err := handler.Service.DeleteUser(request.Context(), user.Id)
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
 		return
 	}
 
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusNoContent)
 	response.Write([]byte(`{"message": "User deleted successfully"}`))
 

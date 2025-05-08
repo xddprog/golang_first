@@ -19,6 +19,7 @@ func InitNewHandler[T types.HandlerInterface](emptyHandler T, db *pgxpool.Pool) 
 		service := &services.UserService{Repository: repository}
 		*h = handlers.UserHandler{Service: service}
 		return any(h).(T), nil
+		
 	case *handlers.AuthHandler:		
 		cfg, err := config.LoadJwtConfig()
 		if err != nil {
@@ -29,6 +30,13 @@ func InitNewHandler[T types.HandlerInterface](emptyHandler T, db *pgxpool.Pool) 
 		service := &services.AuthService{Repository: repository, Config: cfg}
 		*h = handlers.AuthHandler{Service: service}
 		return any(h).(T), nil
+
+	case *handlers.DocumentHandler:
+		repository := &repositories.DocumentRepository{DB: db}
+		service := &services.DocumentService{Repository: repository}
+		*h = handlers.DocumentHandler{Service: service}
+		return any(h).(T), nil
+		
 	default:
 		return emptyHandler, fmt.Errorf("undefined handler type: %T", emptyHandler)
 	}

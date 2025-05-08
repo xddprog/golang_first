@@ -8,8 +8,6 @@ import (
 
 
 func WriteHTTPError(w http.ResponseWriter, err any) {
-    w.Header().Set("Content-Type", "application/json")
-
     switch err := err.(type) {
     case *APIError:
         if err.Code == 0 {

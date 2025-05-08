@@ -6,22 +6,23 @@ import (
     "golang/internal/core/repositories"
     "golang/internal/infrastructure/config"
     "golang/internal/infrastructure/database/models"
-    apierrors "golang/internal/infrastructure/errors"
+    "golang/internal/infrastructure/errors"
     "golang/internal/utils"
     "io"
     "log"
     "time"
 
-    "github.com/go-playground/validator/v10"
     "github.com/golang-jwt/jwt/v5"
     "github.com/jackc/pgx/v5"
     "golang.org/x/crypto/bcrypt"
 )
 
+
 type AuthService struct {
     Config     *config.JwtConfig
     Repository *repositories.UserRepository
 }
+
 
 func (s *AuthService) HashPassword(password string) (string, *apierrors.APIError) {
     hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -32,6 +33,7 @@ func (s *AuthService) HashPassword(password string) (string, *apierrors.APIError
     return string(hashedPassword), nil
 }
 
+
 func (s *AuthService) CheckPassword(password, hashedPassword string) *apierrors.APIError {
     err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
     if err != nil {
@@ -40,14 +42,14 @@ func (s *AuthService) CheckPassword(password, hashedPassword string) *apierrors.
     return nil
 }
 
+
 func (s *AuthService) RegisterUser(
     ctx context.Context,
     userForm io.ReadCloser,
 ) (*models.AuthResponseModel, *apierrors.APIError) {
     var userFormEncoded models.RegisterUserModel
-    err := json.NewDecoder(userForm).Decode(&userFormEncoded)
-    if err != nil {
-        log.Printf("[INTERNAL] Failed to decode user input: %v", err)
+    
+    if err := json.NewDecoder(userForm).Decode(&userFormEncoded); err != nil {
         return nil, &apierrors.ErrInvalidRequestBody
     }
 
@@ -55,17 +57,12 @@ func (s *AuthService) RegisterUser(
     if err != nil && err != pgx.ErrNoRows {
         return nil, apierrors.CheckDBError(err)
     }
-
     if checkExist != nil {
         return nil, &apierrors.ErrUserAlreadyExist
     }
 
-    validate := validator.New()
-    if err := validate.Struct(userForm); err != nil {
-        if validationErrors, ok := err.(validator.ValidationErrors); ok {
-            return nil, apierrors.NewValidationError(validationErrors)
-        }
-        return nil, &apierrors.ErrValidationError
+    if err := utils.ValidateForm(userFormEncoded); err != nil {
+        return nil, err
     }
 
     hashedPassword, hashErr := s.HashPassword(userFormEncoded.Password)
@@ -91,6 +88,7 @@ func (s *AuthService) RegisterUser(
     }, nil
 }
 
+
 func (s *AuthService) createTokenPair(userId int) (*models.TokenPair, *apierrors.APIError) {
     accessToken, err := s.createToken(userId, utils.AccessToken)
     if err != nil {
@@ -108,6 +106,7 @@ func (s *AuthService) createTokenPair(userId int) (*models.TokenPair, *apierrors
     }, nil
 }
 
+
 func (s *AuthService) createToken(userId int, tokenType string) (string, *apierrors.APIError) {
     var expiresAt time.Duration
 
@@ -116,9 +115,6 @@ func (s *AuthService) createToken(userId int, tokenType string) (string, *apierr
         expiresAt = s.Config.AccessTokenTime
     case utils.RefreshToken:
         expiresAt = s.Config.RefreshTokenTime
-    default:
-        log.Printf("[INTERNAL] Unknown token type requested: %s", tokenType)
-        return "", &apierrors.ErrInternalServerError
     }
 
     token := jwt.NewWithClaims(s.Config.SigningMethod, jwt.MapClaims{
@@ -133,6 +129,7 @@ func (s *AuthService) createToken(userId int, tokenType string) (string, *apierr
     }
     return tokenString, nil
 }
+
 
 func (s *AuthService) ValidateToken(ctx context.Context, tokenString string) (*models.UserModel, *apierrors.APIError) {
     if tokenString == "" {
@@ -167,6 +164,7 @@ func (s *AuthService) ValidateToken(ctx context.Context, tokenString string) (*m
     return nil, &apierrors.ErrInvalidToken
 }
 
+
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*models.AuthResponseModel, *apierrors.APIError) {
     user, err := s.ValidateToken(ctx, refreshToken)
     if err != nil {
@@ -187,13 +185,24 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*m
     }, nil
 }
 
-func (s *AuthService) LoginUser(ctx context.Context, userForm models.LoginUserModel) (*models.AuthResponseModel, *apierrors.APIError) {
-    user, err := s.Repository.GetUserByEmail(ctx, userForm.Email)
+
+func (s *AuthService) LoginUser(ctx context.Context, userForm io.ReadCloser) (*models.AuthResponseModel, *apierrors.APIError) {
+    var userFormEncoded models.LoginUserModel
+    err := json.NewDecoder(userForm).Decode(&userFormEncoded)
+    if err != nil {
+        return nil, &apierrors.ErrInvalidRequestBody
+    }
+
+    if err := utils.ValidateForm(userFormEncoded); err != nil {
+        return nil, err
+    }
+
+    user, err := s.Repository.GetUserByEmail(ctx, userFormEncoded.Email)
     if err != nil { 
         return nil, apierrors.CheckDBError(err)
     }
 
-    passErr := s.CheckPassword(userForm.Password, user.Password)
+    passErr := s.CheckPassword(userFormEncoded.Password, user.Password)
     if passErr != nil {
         return nil, passErr
     }
