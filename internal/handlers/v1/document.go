@@ -53,10 +53,46 @@ func (handler *DocumentHandler) GetDocumentById(response http.ResponseWriter, re
 }
 
 
-func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {}
+func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	documentId, err := strconv.Atoi(request.PathValue("id"))
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	document, serviceErr := handler.Service.UpdateDocument(request.Context(), documentId, request.Body)
+	if serviceErr != nil {
+		apierrors.WriteHTTPError(response, serviceErr)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(response).Encode(document); err != nil {
+		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
+	}
+}
 
 
-func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {}
+func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	documentId, err := strconv.Atoi(request.PathValue("id"))
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	handler.Service.DeleteDocument(request.Context(), documentId)
+
+	response.WriteHeader(http.StatusNoContent)
+}
+
+
+func (handler *DocumentHandler) DocumentEditWebsocket(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+
+}
 
 
 func (handler *DocumentHandler) SetupRoutes(server *http.ServeMux, baseUrl string, d *deps.AuthDependency) {

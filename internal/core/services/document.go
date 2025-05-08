@@ -61,3 +61,8 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, documentId int, do
 	}
 	return document, nil
 }
+
+
+func (s *DocumentService) DeleteDocument(ctx context.Context, documentId int) {
+	s.Repository.DeleteDocument(ctx, documentId)
+}
