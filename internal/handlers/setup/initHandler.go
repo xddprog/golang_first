@@ -6,8 +6,10 @@ import (
 	"golang/internal/core/services"
 	"golang/internal/handlers/v1"
 	"golang/internal/infrastructure/config"
+	"golang/internal/infrastructure/database/models"
 	"golang/internal/infrastructure/types"
 
+	socketio "github.com/googollee/go-socket.io"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,7 +36,12 @@ func InitNewHandler[T types.HandlerInterface](emptyHandler T, db *pgxpool.Pool) 
 	case *handlers.DocumentHandler:
 		repository := &repositories.DocumentRepository{DB: db}
 		service := &services.DocumentService{Repository: repository}
-		*h = handlers.DocumentHandler{Service: service}
+		socket := socketio.NewServer(nil)
+		*h = handlers.DocumentHandler{
+			Service: service, 
+			Socket: socket, 
+			Connections: make(map[string]map[string]models.BaseUserModel),
+		}
 		return any(h).(T), nil
 		
 	default:

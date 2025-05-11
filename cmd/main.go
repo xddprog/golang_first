@@ -34,6 +34,7 @@ func main() {
 	userHandler.SetupRoutes(server, "/api/v1", authDependency)
 	authHandler.SetupRoutes(server, "/api/v1", authDependency)
 	documentHandler.SetupRoutes(server, "/api/v1", authDependency)
+	documentHandler.RunWebsocket()
 
 	http.ListenAndServe("localhost:8000", server)
 }

@@ -9,7 +9,7 @@ import (
 func CheckDBError(err error) *APIError {
 	switch err {
 	case pgx.ErrNoRows:
-		return &ErrUserNotFound
+		return &ErrItemNotFound
 	default:
 		log.Printf("Internal Server Error: %v", err)
 	}

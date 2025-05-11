@@ -1,18 +1,26 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"golang/internal/core/services"
-	deps "golang/internal/handlers/dependencies"
+	"golang/internal/handlers/dependencies"
 	"golang/internal/infrastructure/database/models"
-	apierrors "golang/internal/infrastructure/errors"
+	"golang/internal/infrastructure/errors"
+	"log"
 	"net/http"
 	"strconv"
+	"sync"
+
+	"github.com/googollee/go-socket.io"
 )
 
 
 type DocumentHandler struct {
-	Service *services.DocumentService
+	Service 	*services.DocumentService
+	Socket      *socketio.Server
+	Connections map[string]map[string]models.BaseUserModel
+	Mutex 		sync.RWMutex
 }
 
 
@@ -31,27 +39,6 @@ func (handler *DocumentHandler) CreateDocument(response http.ResponseWriter, req
 	}
 }
 
-func (handler *DocumentHandler) GetDocumentById(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
-	response.Header().Set("Content-Type", "application/json")
-
-	documentId, err := strconv.Atoi(request.PathValue("id"))
-	if err != nil {
-		apierrors.WriteHTTPError(response, err)
-		return
-	}
-
-	document, serviceErr := handler.Service.GetDocumentById(request.Context(), documentId)
-	if serviceErr != nil {
-		apierrors.WriteHTTPError(response, serviceErr)
-		return
-	}
-
-	response.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(response).Encode(document); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
-}
-
 
 func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
 	response.Header().Set("Content-Type", "application/json")
@@ -62,7 +49,7 @@ func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, req
 		return
 	}
 
-	document, serviceErr := handler.Service.UpdateDocument(request.Context(), documentId, request.Body)
+	document, serviceErr := handler.Service.UpdateDocument(request.Context(), user.Id, documentId, request.Body)
 	if serviceErr != nil {
 		apierrors.WriteHTTPError(response, serviceErr)
 		return
@@ -84,20 +71,135 @@ func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, req
 		return
 	}
 
-	handler.Service.DeleteDocument(request.Context(), documentId)
+	if err := handler.Service.DeleteDocument(request.Context(), documentId, user.Id); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
 
 	response.WriteHeader(http.StatusNoContent)
 }
 
 
-func (handler *DocumentHandler) DocumentEditWebsocket(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+func (handler *DocumentHandler) notifyUsers(documentId string) {
+	handler.Mutex.RLock()
+	defer handler.Mutex.RUnlock()
 
+	users := make([]*models.BaseUserModel, 0, len(handler.Connections[documentId]))
+
+	for _, user := range handler.Connections[documentId] {
+		users = append(users, &user)
+	}
+
+	handler.Socket.BroadcastToRoom("/", "doc_" + documentId, "users_update", users)
+}
+
+
+func (handler *DocumentHandler) HandleConnect(s socketio.Conn) error {
+	s.SetContext("")
+	return nil
+}
+
+
+func (handler *DocumentHandler) HandleJoinDocument(s socketio.Conn, documentId string, user *models.BaseUserModel) {
+	convDocumentId, err := strconv.Atoi(documentId)
+	if err != nil {
+		s.Emit("error", "invalid documentId")
+		return
+	}
+
+	_, dbErr := handler.Service.GetDocumentById(context.Background(), convDocumentId, user.Id)
+	if dbErr != nil {
+		s.Emit("error", dbErr.Error())
+		return
+	}
+
+	s.Join("doc_" + documentId)
+
+	handler.Mutex.Lock()
+	if handler.Connections[documentId] == nil {
+		handler.Connections[documentId] = make(map[string]models.BaseUserModel)
+	}
+	handler.Connections[documentId][s.ID()] = *user
+	handler.Mutex.Unlock()
+
+	document, _ := handler.Service.GetDocumentById(context.Background(), convDocumentId, user.Id)
+	s.Emit("document_state", document)
+
+	handler.notifyUsers(documentId)
+}
+
+
+func (handler *DocumentHandler) HandleDocumentUpdate(s socketio.Conn, data string, user *models.BaseUserModel) {
+	var update models.UpdateDocumentContent
+
+	if err := json.Unmarshal([]byte(data), &update); err != nil {
+		s.Emit("error", apierrors.ErrEncodingError.Error())
+		return 
+	}
+
+	_, err := strconv.Atoi(update.DocumentId)
+	if err != nil {
+		s.Emit("error", "invalid documentId")
+		return
+	}
+
+	document, updateErr := handler.Service.UpdateDocumentContent(context.Background(), user.Id, update.DocumentId, update.Content)
+	if updateErr != nil {
+		s.Emit("error", updateErr.Error())
+		return
+	}
+
+	s.Emit("document_updated", document)
+
+}
+
+
+func (handler *DocumentHandler) HandlerCursorMove(s socketio.Conn, data string, user *models.BaseUserModel) {
+	var move models.CursorMove
+
+	if err := json.Unmarshal([]byte(data), &move); err != nil {
+		s.Emit("error", apierrors.ErrEncodingError.Error())
+		return
+	}
+
+	handler.Socket.BroadcastToRoom("/", "doc_" + move.DocumentId, "cursor_move", move.Position)
+}
+
+
+func (handler *DocumentHandler) HandleDisconnect(s socketio.Conn, reason string) {
+	handler.Mutex.Lock()
+	defer handler.Mutex.Unlock()
+
+	for documentId, users := range handler.Connections {
+		if _, exists := users[s.ID()]; exists {
+			delete(handler.Connections[documentId], s.ID())
+			go handler.notifyUsers(documentId)
+		}
+	}
+}
+
+
+func (handler *DocumentHandler) SetupSocket(server *socketio.Server, d *deps.AuthDependency) {
+	handler.Socket.OnConnect("/", d.ProtectConnect(handler.HandleConnect))
+	handler.Socket.OnEvent("/", "join", d.ProtectEvent(handler.HandleJoinDocument))
+	handler.Socket.OnEvent("/", "update", d.ProtectEvent(handler.HandleDocumentUpdate))
+	handler.Socket.OnEvent("/", "cursor_move", d.ProtectEvent(handler.HandlerCursorMove))
+	handler.Socket.OnDisconnect("/", handler.HandleDisconnect)
 }
 
 
 func (handler *DocumentHandler) SetupRoutes(server *http.ServeMux, baseUrl string, d *deps.AuthDependency) {
 	server.HandleFunc("POST " + baseUrl+ "/documents", d.Protected(handler.CreateDocument))
-	server.HandleFunc("GET " + baseUrl+ "/documents", d.Protected(handler.GetDocumentById))
 	server.HandleFunc("PUT " + baseUrl+ "/documents", d.Protected(handler.UpdateDocument))
 	server.HandleFunc("DELETE " + baseUrl+ "/documents", d.Protected(handler.DeleteDocument))
+	server.Handle(baseUrl + "documents/ws/{id}", handler.Socket)
+}
+
+
+func (handler *DocumentHandler) RunWebsocket() {
+	go func() {
+		if err := handler.Socket.Serve(); err != nil {
+			log.Printf("Socket.IO error: %v", err)
+		}
+	}()
 }

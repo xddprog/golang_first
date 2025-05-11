@@ -27,14 +27,14 @@ func (e *APIError) Error() string {
 
 
 var (
-	ErrUserNotFound = APIError{Code: http.StatusNotFound, Message: "user not found"}
+	ErrItemNotFound = APIError{Code: http.StatusNotFound, Message: "item not found"}
 	ErrUserAlreadyExist = APIError{Code: http.StatusConflict, Message: "user already exists"}
 	ErrInternalServerError = APIError{Code: http.StatusInternalServerError, Message: "internal server error"}
 	ErrInvalidRequestBody = APIError{Code: http.StatusBadRequest, Message: "invalid request body"}
 	ErrEncodingError = APIError{Code: http.StatusInternalServerError, Message: "encoding error"}
 	ErrValidationError = APIError{Code: http.StatusBadRequest, Message: "validation error"}
 	ErrInvalidToken = APIError{Code: http.StatusUnauthorized, Message: "invalid token"}
-	ErrInvaliLoginData = APIError{Code: http.StatusUnauthorized, Message: "invalid logon data"}
+	ErrInvaliLoginData = APIError{Code: http.StatusUnauthorized, Message: "invalid login data"}
 )
 
 

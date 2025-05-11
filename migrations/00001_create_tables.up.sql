@@ -22,6 +22,12 @@ CREATE TABLE documents (
 )
 
 
+CREATE TABLE documents_users (
+    user_id INTEGER REFERENCES users(id),
+    document_id INTEGER REFERENCES documents(id),
+    PRIMARY KEY (user_id, document_id)
+)
+
 CREATE TABLE comments (
     id SERIAL PRIMARY KEY,
     document_id INTEGER REFERENCES documents.id,

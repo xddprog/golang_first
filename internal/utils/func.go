@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx"
 )
 
 
@@ -20,10 +21,11 @@ func GetSetParams(form any) (string, []any) {
 
     for i := 0; i < values.NumField(); i++ {
 		value := values.Field(i)
-		field := types.Field(i).Tag.Get("db")
 
 		if !value.IsNil() {
-			clauses = append(clauses, fmt.Sprintf("%s = $%d", field, paramIndex))
+			field := types.Field(i).Tag.Get("db")
+			safeField := pgx.Identifier{field}.Sanitize()
+			clauses = append(clauses, fmt.Sprintf("%s = $%d", safeField, paramIndex))
 			args = append(args, value.Interface())
 			paramIndex++
 		}

@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 
 type DocumentOwner struct {
@@ -11,22 +14,40 @@ type DocumentOwner struct {
 
 type CreateDocumentModel struct {
 	Title   string 
-	Content string
+	IsPublic bool
 }
 
 
 type UpdateDocumentModel struct {
-	Title *string `json:"title,omitempty" db:"title" validate:"omitempty"`
-	IsPublic *bool `json:"is_public,omitempty" db:"is_public" validate:"omitempty"`
+	Title 		*string 	`json:"title,omitempty" db:"title" validate:"omitempty"`
+	IsPublic 	*bool 		`json:"is_public,omitempty" db:"is_public" validate:"omitempty"`
+}
+
+
+type UpdateDocumentContent struct {
+	DocumentId 	string 		`json:"documentId"`
+	Content 	string 		`json:"content"`
+}
+
+
+type CursorMove struct {
+	DocumentId 	string          `json:"doc_id"`
+	Position    json.RawMessage `json:"position"`
+}
+
+
+type BaseDocumentModel struct {
+	Id        int       	`json:"id"`
+	Title     string    	`json:"title"`
+	Content   string    	`json:"content"`
+	CreatedAt time.Time 	`json:"createdAt"`
+	IsPublic  bool			`json:"isPublic"`
+	UpdatedAt time.Time 	`json:"updatedAt"`
 }
 
 
 type DocumentModel struct {
-	Id        int       	`json:"id"`
-	Title     string    	`json:"title"`
-	Content   string    	`json:"content"`
-	Owner	  BaseUserModel `json:"owner"`
-	CreatedAt time.Time 	`json:"createdAt"`
-	IsPublic  bool			`json:"isPublic"`
-	UpdatedAt time.Time 	`json:"updatedAt"`
+	BaseDocumentModel 
+	Owner	  BaseUserModel 	`json:"owner"`
+	Members   []BaseUserModel 	`json:"members"`
 }

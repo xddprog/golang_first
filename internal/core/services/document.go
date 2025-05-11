@@ -8,6 +8,7 @@ import (
 	"golang/internal/infrastructure/errors"
 	"golang/internal/utils"
 	"io"
+	"strconv"
 )
 
 
@@ -16,7 +17,7 @@ type DocumentService struct {
 }
 
 
-func (s *DocumentService) CreateDocument(ctx context.Context, userId int, documentForm io.ReadCloser) (*models.DocumentModel, *apierrors.APIError) {
+func (s *DocumentService) CreateDocument(ctx context.Context, userId int, documentForm io.ReadCloser) (*models.BaseDocumentModel, *apierrors.APIError) {
 	var documentFormEncoded models.CreateDocumentModel
 
 	if err := json.NewDecoder(documentForm).Decode(&documentFormEncoded); err != nil {
@@ -35,8 +36,12 @@ func (s *DocumentService) CreateDocument(ctx context.Context, userId int, docume
 }
 
 
-func (s *DocumentService) GetDocumentById(ctx context.Context, documentId int) (*models.DocumentModel, *apierrors.APIError) {
-	document, err := s.Repository.GetDocumentById(ctx, documentId)
+func (s *DocumentService) GetDocumentById(
+	ctx context.Context, 
+	documentId int, 
+	userId int,
+) (*models.DocumentModel, *apierrors.APIError) {
+	document, err := s.Repository.GetDocumentById(ctx, documentId, userId)
 	if err != nil {
 		return nil, apierrors.CheckDBError(err)
 	}
@@ -44,7 +49,7 @@ func (s *DocumentService) GetDocumentById(ctx context.Context, documentId int) (
 }
 
 
-func (s *DocumentService) UpdateDocument(ctx context.Context, documentId int, documentForm io.ReadCloser) (*models.DocumentModel, *apierrors.APIError) {
+func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, documentId int, documentForm io.ReadCloser,) (*models.BaseDocumentModel, *apierrors.APIError) {
 	var documentFormEncoded models.UpdateDocumentModel
 
 	if err := json.NewDecoder(documentForm).Decode(&documentFormEncoded); err != nil {
@@ -55,7 +60,7 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, documentId int, do
 		return nil, &apierrors.ErrEncodingError
 	}
 
-	document, err := s.Repository.UpdateDocument(ctx, documentId, documentFormEncoded)
+	document, err := s.Repository.UpdateDocument(ctx, userId, documentId, documentFormEncoded)
 	if err != nil {
 		return nil, apierrors.CheckDBError(err)
 	}
@@ -63,6 +68,29 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, documentId int, do
 }
 
 
-func (s *DocumentService) DeleteDocument(ctx context.Context, documentId int) {
-	s.Repository.DeleteDocument(ctx, documentId)
+func (s *DocumentService) DeleteDocument(ctx context.Context, documentId int, userId int) *apierrors.APIError {
+	err := s.Repository.DeleteDocument(ctx, documentId, userId)
+	if err != nil {
+		return apierrors.CheckDBError(err)
+	}
+	return nil
+}
+
+
+func (s *DocumentService) UpdateDocumentContent(
+	ctx context.Context, 
+	userId int,
+	documentId string,
+	content string,
+) (*models.DocumentModel, *apierrors.APIError) {
+	documentIdInt, err := strconv.Atoi(documentId)
+	if err != nil {
+		return nil, &apierrors.ErrInvalidRequestBody
+	}
+
+	document, err := s.Repository.UpdateDocumentContent(ctx, userId, documentIdInt, content)
+	if err != nil {
+		return nil, apierrors.CheckDBError(err)
+	}
+	return document, nil
 }
