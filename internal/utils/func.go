@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	apierrors "golang/internal/infrastructure/errors"
+	"math/rand"
 	"reflect"
 	"strings"
 
@@ -44,4 +45,14 @@ func ValidateForm(form any) *apierrors.APIError {
         return &apierrors.ErrValidationError
     }
     return nil
+}
+
+
+func RandSeq(n int) string {
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    b := make([]rune, n)
+    for i := range b {
+        b[i] = letters[rand.Intn(len(letters))]
+    }
+    return string(b)
 }

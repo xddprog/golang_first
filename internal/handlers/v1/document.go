@@ -80,6 +80,28 @@ func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, req
 }
 
 
+func (handler *DocumentHandler) SendInvite(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	documentId, err := strconv.Atoi(request.PathValue("id"))
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	smtpErr := handler.Service.SendInvite(request.Context(), user.Id, request.PathValue("email"), documentId)
+	if smtpErr != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(response).Encode(`{"detail": "Invite sent successfully"}`); err != nil {
+		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
+	}
+}
+
+
 func (handler *DocumentHandler) notifyUsers(documentId string) {
 	handler.Mutex.RLock()
 	defer handler.Mutex.RUnlock()

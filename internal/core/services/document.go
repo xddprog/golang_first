@@ -3,17 +3,22 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"golang/internal/core/repositories"
+	"golang/internal/infrastructure/clients"
 	"golang/internal/infrastructure/database/models"
 	"golang/internal/infrastructure/errors"
 	"golang/internal/utils"
 	"io"
 	"strconv"
+	"time"
 )
 
 
 type DocumentService struct {
 	Repository *repositories.DocumentRepository
+	RedisClient      *clients.RedisClient
+	SMTPClient       *clients.SmtpClient
 }
 
 
@@ -30,7 +35,7 @@ func (s *DocumentService) CreateDocument(ctx context.Context, userId int, docume
 
 	document, err := s.Repository.CreateDocument(ctx, documentFormEncoded, userId)
 	if err != nil {
-		return nil, apierrors.CheckDBError(err)
+		return nil, apierrors.CheckDBError(err, "document")
 	}
 	return document, nil
 }
@@ -41,15 +46,20 @@ func (s *DocumentService) GetDocumentById(
 	documentId int, 
 	userId int,
 ) (*models.DocumentModel, *apierrors.APIError) {
+	_, err := s.Repository.CheckDocumentAccess(ctx, userId, documentId)
+	if err != nil {
+		return nil, &apierrors.ErrDocumentAccessDenied
+	}
+
 	document, err := s.Repository.GetDocumentById(ctx, documentId, userId)
 	if err != nil {
-		return nil, apierrors.CheckDBError(err)
+		return nil, apierrors.CheckDBError(err, "document")
 	}
 	return document, nil
 }
 
 
-func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, documentId int, documentForm io.ReadCloser,) (*models.BaseDocumentModel, *apierrors.APIError) {
+func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, documentId int, documentForm io.ReadCloser) (*models.BaseDocumentModel, *apierrors.APIError) {
 	var documentFormEncoded models.UpdateDocumentModel
 
 	if err := json.NewDecoder(documentForm).Decode(&documentFormEncoded); err != nil {
@@ -62,7 +72,7 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, docume
 
 	document, err := s.Repository.UpdateDocument(ctx, userId, documentId, documentFormEncoded)
 	if err != nil {
-		return nil, apierrors.CheckDBError(err)
+		return nil, apierrors.CheckDBError(err, "document")
 	}
 	return document, nil
 }
@@ -71,7 +81,7 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, docume
 func (s *DocumentService) DeleteDocument(ctx context.Context, documentId int, userId int) *apierrors.APIError {
 	err := s.Repository.DeleteDocument(ctx, documentId, userId)
 	if err != nil {
-		return apierrors.CheckDBError(err)
+		return apierrors.CheckDBError(err, "document")
 	}
 	return nil
 }
@@ -90,7 +100,44 @@ func (s *DocumentService) UpdateDocumentContent(
 
 	document, err := s.Repository.UpdateDocumentContent(ctx, userId, documentIdInt, content)
 	if err != nil {
-		return nil, apierrors.CheckDBError(err)
+		return nil, apierrors.CheckDBError(err, "document")
 	}
 	return document, nil
+}
+
+
+func (s *DocumentService) SendInvite(
+	ctx context.Context, 
+	userId int, 
+	userEmail string,
+	documentId int,
+) *apierrors.APIError {
+key := fmt.Sprintf("document:%d:user:%d:invite", documentId, userId)
+	code := utils.RandSeq(6)
+	err := s.RedisClient.Set(ctx, key, code, time.Hour*24)
+	if err != nil {
+		return &apierrors.ErrInvalidRequestBody
+	}
+
+	redisErr := s.RedisClient.Set(ctx, key, code, time.Hour * 24 )
+	if redisErr != nil {
+		return &apierrors.ErrInternalServerError
+	}
+
+	document, err := s.Repository.GetDocumentById(ctx, documentId, userId)
+	if err != nil {
+		return apierrors.CheckDBError(err, "document")
+	}
+
+	smtpErr := s.SMTPClient.SendInviteToDocument(
+		userEmail, 
+		"Invite to Document", 
+		code, 
+		strconv.Itoa(documentId), 
+		document.Title,
+	)
+	if smtpErr != nil {
+		return &apierrors.ErrInternalServerError
+	}
+	return nil
 }

@@ -1,6 +1,10 @@
 package clients
 
-import "github.com/rabbitmq/amqp091-go"
+import (
+	"golang/internal/infrastructure/config"
+
+	"github.com/rabbitmq/amqp091-go"
+)
 
 
 type RabbitClient struct {
@@ -8,6 +12,11 @@ type RabbitClient struct {
 }
 
 
-func NewRabbitClient(host string, connection *amqp091.Connection) *RabbitClient {
-	return &RabbitClient{Connection: connection}
+func NewRabbitClient() *RabbitClient {
+	rabbitCfg := config.LoadRabbitConfig()
+	conn, err := amqp091.Dial(rabbitCfg.ConnectionString())
+	if err != nil {
+		panic(err)
+	}
+	return &RabbitClient{Connection: conn}
 }

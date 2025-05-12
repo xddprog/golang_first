@@ -55,7 +55,7 @@ func (s *AuthService) RegisterUser(
 
     checkExist, err := s.Repository.GetUserByEmail(ctx, userFormEncoded.Email)
     if err != nil && err != pgx.ErrNoRows {
-        return nil, apierrors.CheckDBError(err)
+        return nil, &apierrors.ErrInternalServerError
     }
     if checkExist != nil {
         return nil, &apierrors.ErrUserAlreadyExist
@@ -74,7 +74,7 @@ func (s *AuthService) RegisterUser(
 
     user, err := s.Repository.CreateUser(ctx, userFormEncoded)
     if err != nil {
-        return nil, apierrors.CheckDBError(err)
+        return nil, &apierrors.ErrInternalServerError
     }
 
     tokenPair, tokenPairErr := s.createTokenPair(user.Id)
@@ -156,7 +156,7 @@ func (s *AuthService) ValidateToken(ctx context.Context, tokenString string) (*m
 
         user, err := s.Repository.GetUserById(ctx, int(userID))
         if err != nil {
-            return nil, apierrors.CheckDBError(err)
+            return nil, apierrors.CheckDBError(err, "user")
         }
         return user, nil
     }
@@ -199,7 +199,7 @@ func (s *AuthService) LoginUser(ctx context.Context, userForm io.ReadCloser) (*m
 
     user, err := s.Repository.GetUserByEmail(ctx, userFormEncoded.Email)
     if err != nil { 
-        return nil, apierrors.CheckDBError(err)
+        return nil, apierrors.CheckDBError(err, "user")
     }
 
     passErr := s.CheckPassword(userFormEncoded.Password, user.Password)

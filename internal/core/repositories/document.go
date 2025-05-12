@@ -15,17 +15,16 @@ type DocumentRepository struct {
 	DB *pgxpool.Pool
 }
 
-
-func (r *DocumentRepository) CheckDocumentAccess(ctx context.Context, transaction pgx.Tx, userID, docID int) (bool, error) {
+func (r *DocumentRepository) CheckDocumentAccess(ctx context.Context, userID int, docID int) (bool, error) {
     var hasAccess bool
     err := r.DB.QueryRow(ctx, `
         SELECT EXISTS(
-            SELECT 1 FROM documents 
-            WHERE id = $1 AND (
-                owner_id = $2 OR 
-                id IN (SELECT document_id FROM documents_users WHERE user_id = $2)
-            )
-        )`, docID, userID).Scan(&hasAccess)
+			SELECT 1 
+			FROM documents d
+			JOIN documents_users du ON du.document_id = d.id
+			WHERE d.id = $1 AND du.user_id = $2 AND d.is_public = true
+		)
+    `, docID, userID).Scan(&hasAccess)
     return hasAccess, err
 }
 
@@ -33,23 +32,32 @@ func (r *DocumentRepository) CheckDocumentAccess(ctx context.Context, transactio
 func (r *DocumentRepository) CreateDocument(ctx context.Context, form models.CreateDocumentModel, userId int) (*models.BaseDocumentModel, error) {
 	var document models.BaseDocumentModel
 
+	tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	query := `
-		SELECT 
-			d.id, d.title, d.content, d.is_public, d.created_at, d.updated_at
-		FROM 
-			(
-				INSERT INTO documents (title, owner_id, is_public)
-				VALUES
-					($1, $2, $3)
-				RETURNING id, title, content, is_public, created_at, updated_at
-			) as d
+		INSERT INTO documents (title, owner_id, is_public)
+		VALUES ($1, $2, $3)
+		RETURNING id, title, content, is_public, created_at, updated_at
 	`
-	err := r.DB.QueryRow(ctx, query, form.Title, userId, form.IsPublic).Scan(
+	insertDocErr := tx.QueryRow(ctx, query, form.Title, userId, form.IsPublic).Scan(
 		&document.Id, &document.Title, &document.Content, 
 		&document.IsPublic, &document.CreatedAt, &document.UpdatedAt,
 	)
-	if err != nil {
-		return nil, err
+	if insertDocErr != nil {
+		return nil, insertDocErr
+	}
+
+	query = `
+		INSERT INTO documents_users (document_id, user_id)
+		VALUES ($1, $2)
+	`
+	_, insertDocUserErr := tx.Exec(ctx, query, document.Id, userId)
+	if insertDocUserErr != nil {
+		return nil, insertDocUserErr
 	}
 
 	return &document, nil
@@ -88,30 +96,14 @@ func (r *DocumentRepository) UpdateDocument(
 	documentId int, 
 	documentFormEncoded models.UpdateDocumentModel,
 ) (*models.BaseDocumentModel, error) {
-	tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
-    if err != nil {
-        return nil, err
-    }
-    defer tx.Rollback(ctx)
-
-	_, accessErr := r.CheckDocumentAccess(ctx, tx, userId, documentId)
-	if accessErr != nil {
-		return nil, accessErr
-	}
-
 	var document models.BaseDocumentModel
 	clauses, args := utils.GetSetParams(documentFormEncoded)
 
 	query := fmt.Sprintf(`
-		SELECT 
-			d.id, d.title, d.content, d.is_public, d.created_at, d.updated_at,
-		FROM 
-			(
-				UPDATE documents 
-				SET %s 
-				WHERE id = $%d AND owner_id = $%d
-				RETURNING id, title, content, is_public, created_at, updated_at
-			) as d
+		UPDATE documents 
+		SET %s 
+		WHERE id = $%d AND owner_id = $%d
+		RETURNING id, title, content, is_public, created_at, updated_at
 	`, clauses, documentId, userId)
 
 	documentErr := r.DB.QueryRow(ctx, query, args...).Scan(
@@ -127,7 +119,22 @@ func (r *DocumentRepository) UpdateDocument(
 
 
 func (r *DocumentRepository) DeleteDocument(ctx context.Context, documentId int, userId int) error{
-	_, err := r.DB.Exec(ctx, "DELETE FROM documents WHERE id = $1 AND owner_id = $2", documentId, userId)
+	tx , err := r.DB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, "DELETE FROM documents WHERE id = $1 AND owner_id = $2", documentId, userId)
+	if err != nil {
+		return err
+	}
+
+	query := `
+		DELETE FROM documents_users
+		WHERE document_id = $1 AND user_id = $2
+	`
+	_, err = r.DB.Exec(ctx, query, documentId, userId)
 	if err != nil {
 		return err
 	}
@@ -141,36 +148,51 @@ func (r *DocumentRepository) UpdateDocumentContent(
 	documentId int, 
 	content string,
 ) (*models.DocumentModel, error) {
-	transaction, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
+	var document models.DocumentModel
+	
+	query := `
+		UPDATE documents 
+		SET content = $1
+		WHERE id = $2 AND owner_id = $3
+		RETURNING id, title, content, is_public, created_at, updated_at
+	`
+	err := r.DB.QueryRow(ctx, query, content, documentId, userId).Scan(
+		&document.Id, &document.Title, &document.Content, 
+		&document.IsPublic, &document.CreatedAt, &document.UpdatedAt,
+	)
+	
+	if err != nil {
+		return nil, err
+	}
+	return &document, nil
+}
+
+
+func (r *DocumentRepository) GetDocumentsByUserId(ctx context.Context, userId int) ([]models.DocumentModel, error) {
+	var documents []models.DocumentModel
+
+	query := `
+		SELECT d.id, d.title, d.content, d.is_public, d.created_at, d.updated_at
+		FROM documents AS d
+		JOIN documents_users AS d_u ON d_u.user_id = $1
+		WHERE d_u.user_id = $1
+	`
+	rows, err := r.DB.Query(ctx, query, userId)
 	if err != nil {
 		return nil, err
 	}
 
-	_, accessErr := r.CheckDocumentAccess(ctx, transaction, userId, documentId)
-	if accessErr != nil {
-		return nil, accessErr
+	for rows.Next() {
+		var document models.DocumentModel
+		err := rows.Scan(
+			&document.Id, &document.Title, &document.Content, 
+			&document.IsPublic, &document.CreatedAt, &document.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		documents = append(documents, document)
 	}
 
-	var document models.DocumentModel
-	
-	query := `
-		SELECT 
-			d.id, d.title, d.content, d.is_public, d.created_at, d.updated_at,
-		FROM 
-			(
-				UPDATE documents 
-				SET content = $1
-				WHERE id = $2 AND owner_id = $3
-				RETURNING id, title, content, is_public
-			) as d
-	`
-	deleteErr := r.DB.QueryRow(ctx, query, content, documentId, userId).Scan(
-		&document.Id, &document.Title, &document.Content,
-		&document.CreatedAt, &document.UpdatedAt,
-	)
-	
-	if deleteErr != nil {
-		return nil, deleteErr
-	}
-	return &document, nil
+	return documents, nil
 }

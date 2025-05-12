@@ -27,7 +27,9 @@ func (e *APIError) Error() string {
 
 
 var (
-	ErrItemNotFound = APIError{Code: http.StatusNotFound, Message: "item not found"}
+	ErrItemNotFound = func (itemName string) *APIError {
+		return &APIError{Code: http.StatusNotFound, Message: fmt.Sprintf("%s not found", itemName)}
+	}
 	ErrUserAlreadyExist = APIError{Code: http.StatusConflict, Message: "user already exists"}
 	ErrInternalServerError = APIError{Code: http.StatusInternalServerError, Message: "internal server error"}
 	ErrInvalidRequestBody = APIError{Code: http.StatusBadRequest, Message: "invalid request body"}
@@ -35,6 +37,8 @@ var (
 	ErrValidationError = APIError{Code: http.StatusBadRequest, Message: "validation error"}
 	ErrInvalidToken = APIError{Code: http.StatusUnauthorized, Message: "invalid token"}
 	ErrInvaliLoginData = APIError{Code: http.StatusUnauthorized, Message: "invalid login data"}
+	ErrDocumentAccessDenied = APIError{Code: http.StatusForbidden, Message: "access to document denied"}
+	ErrDocumentNotFound = APIError{Code: http.StatusNotFound, Message: "document not found"}
 )
 
 
