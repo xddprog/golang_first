@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	apierrors "golang/internal/infrastructure/errors"
 	"math/rand"
+	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -55,4 +58,38 @@ func RandSeq(n int) string {
         b[i] = letters[rand.Intn(len(letters))]
     }
     return string(b)
+}
+
+
+func GetLimitAndOffset(request *http.Request) (int, int) {
+	limit := 10
+	offset := 0
+
+	if limitStr := request.URL.Query().Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if offsetStr := request.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil {
+			offset = parsedOffset
+		}
+	}
+
+	return limit, offset
+}
+
+
+func WriteJSONResponse(w http.ResponseWriter, status int, data interface{}) error {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    if data == nil {
+        return nil
+    }
+    if err := json.NewEncoder(w).Encode(data); err != nil {
+        apierrors.WriteHTTPError(w, apierrors.ErrEncodingError)
+        return err
+    }
+    return nil
 }

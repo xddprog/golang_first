@@ -1,13 +1,11 @@
 package handlers
 
 import (
-	"context"
-	"encoding/json"
 	"golang/internal/core/services"
 	"golang/internal/handlers/dependencies"
 	"golang/internal/infrastructure/database/models"
 	"golang/internal/infrastructure/errors"
-	"log"
+	"golang/internal/utils"
 	"net/http"
 	"strconv"
 	"sync"
@@ -17,30 +15,27 @@ import (
 
 
 type DocumentHandler struct {
-	Service 	*services.DocumentService
-	Socket      *socketio.Server
-	Connections map[string]map[string]models.BaseUserModel
-	Mutex 		sync.RWMutex
+	DocumentService 	*services.DocumentService
+	CommentService  	*services.CommentService
+	Socket      		*socketio.Server
+	Connections 		map[string]map[string]models.BaseUserModel
+	Mutex 				sync.RWMutex
 }
 
 
-func (handler *DocumentHandler) CreateDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+func (handler *DocumentHandler) CreateDocument(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
 	response.Header().Set("Content-Type", "application/json")
 
-	document, err := handler.Service.CreateDocument(request.Context(), user.Id, request.Body)
+	document, err := handler.DocumentService.CreateDocument(request.Context(), user.Id, request.Body)
 	if err != nil {
 		apierrors.WriteHTTPError(response, err)
 		return
 	}
-
-	response.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(response).Encode(document); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
+	utils.WriteJSONResponse(response, http.StatusCreated, document)
 }
 
 
-func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
 	response.Header().Set("Content-Type", "application/json")
 
 	documentId, err := strconv.Atoi(request.PathValue("id"))
@@ -49,20 +44,34 @@ func (handler *DocumentHandler) UpdateDocument(response http.ResponseWriter, req
 		return
 	}
 
-	document, serviceErr := handler.Service.UpdateDocument(request.Context(), user.Id, documentId, request.Body)
+	document, serviceErr := handler.DocumentService.UpdateDocument(request.Context(), user.Id, documentId, request.Body)
 	if serviceErr != nil {
 		apierrors.WriteHTTPError(response, serviceErr)
 		return
 	}
 
+	utils.WriteJSONResponse(response, http.StatusOK, document)
+}
+
+
+func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	documentId, err := strconv.Atoi(request.PathValue("id"))
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	if err := handler.DocumentService.DeleteDocument(request.Context(), documentId, user.Id); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
 	response.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(response).Encode(document); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
 }
 
-
-func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+func (handler *DocumentHandler) AddDocumentSnapshot(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
 	response.Header().Set("Content-Type", "application/json")
 
 	documentId, err := strconv.Atoi(request.PathValue("id"))
@@ -71,16 +80,17 @@ func (handler *DocumentHandler) DeleteDocument(response http.ResponseWriter, req
 		return
 	}
 
-	if err := handler.Service.DeleteDocument(request.Context(), documentId, user.Id); err != nil {
-		apierrors.WriteHTTPError(response, err)
+	snapshot, serviceErr := handler.DocumentService.AddDocumentSnapshot(request.Context(), user.Id, documentId)
+	if serviceErr != nil {
+		apierrors.WriteHTTPError(response, serviceErr)
 		return
 	}
 
-	response.WriteHeader(http.StatusNoContent)
+	utils.WriteJSONResponse(response, http.StatusOK, snapshot)
 }
 
 
-func (handler *DocumentHandler) SendInvite(response http.ResponseWriter, request *http.Request, user *models.UserModel) {
+func (handler *DocumentHandler) SendInvite(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
 	response.Header().Set("Content-Type", "application/json")
 
 	documentId, err := strconv.Atoi(request.PathValue("id"))
@@ -89,124 +99,148 @@ func (handler *DocumentHandler) SendInvite(response http.ResponseWriter, request
 		return
 	}
 
-	smtpErr := handler.Service.SendInvite(request.Context(), user.Id, request.PathValue("email"), documentId)
+	smtpErr := handler.DocumentService.SendInvite(request.Context(), user.Id, request.PathValue("email"), documentId)
 	if smtpErr != nil {
+		apierrors.WriteHTTPError(response, smtpErr)
+		return
+	}
+
+	utils.WriteJSONResponse(response, http.StatusOK, `{"detail": "Invite sent successfully"}`)
+}
+
+
+func (handler *DocumentHandler) GetComments(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	documentId, err := strconv.Atoi(request.PathValue("id"))
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	if err := handler.DocumentService.CheckDocumentAccess(request.Context(), user.Id, documentId); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	limit, offset := utils.GetLimitAndOffset(request)
+	comments, dbErr := handler.CommentService.GetCommentsByDocument(request.Context(), documentId, limit, offset)
+	if dbErr != nil {
+	    apierrors.WriteHTTPError(response, dbErr)
+		return
+	}
+	utils.WriteJSONResponse(response, http.StatusOK, comments)
+}
+
+
+func (handler *DocumentHandler) AddComment(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
+	response.Header().Set("Content-Type", "application/json")
+	documentId, err := strconv.Atoi(request.PathValue("id"))
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	if err := handler.DocumentService.CheckDocumentAccess(request.Context(), user.Id, documentId); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	comment, err := handler.CommentService.CreateComment(request.Context(), user, documentId, request.Body)
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return	
+	}
+	
+	utils.WriteJSONResponse(response, http.StatusOK, comment)
+}
+
+
+func (handler *DocumentHandler) UpdateComment(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
+	response.Header().Set("Content-Type", "application/json")
+	
+	commentId, commentIdErr := strconv.Atoi(request.PathValue("commentId"))
+	if commentIdErr != nil {
+		apierrors.WriteHTTPError(response, apierrors.ErrInvalidRequestBody)
+		return
+	}
+	documentId, documentIdErr := strconv.Atoi(request.PathValue("documentId"))
+	if documentIdErr != nil {
+	    apierrors.WriteHTTPError(response, apierrors.ErrInvalidRequestBody)
+		return
+	}
+
+	if err := handler.DocumentService.CheckDocumentAccess(request.Context(), user.Id, documentId); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	comment, err := handler.CommentService.UpdateComment(request.Context(), commentId, user.Id, request.Body)
+	if err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	utils.WriteJSONResponse(response, http.StatusOK, comment)
+
+}
+
+
+func (handler *DocumentHandler) DeleteComment(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	commentId, commentIdErr := strconv.Atoi(request.PathValue("commentId"))
+	if commentIdErr != nil {
+		apierrors.WriteHTTPError(response, apierrors.ErrInvalidRequestBody)
+		return
+	}
+	documentId, documentIdErr := strconv.Atoi(request.PathValue("documentId"))
+	if documentIdErr != nil {
+	    apierrors.WriteHTTPError(response, apierrors.ErrInvalidRequestBody)
+		return
+	}
+
+	if err := handler.DocumentService.CheckDocumentAccess(request.Context(), user.Id, documentId); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
+
+	err := handler.CommentService.DeleteComment(request.Context(), user.Id, commentId, documentId)
+	if err != nil {
 		apierrors.WriteHTTPError(response, err)
 		return
 	}
 
 	response.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(response).Encode(`{"detail": "Invite sent successfully"}`); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
+}
+
+
+func (handler *DocumentHandler) GetCommentsReplies(response http.ResponseWriter, request *http.Request, user *models.BaseUserModel) {
+	response.Header().Set("Content-Type", "application/json")
+
+	commentId, commentIdErr := strconv.Atoi(request.PathValue("commentId"))
+	if commentIdErr != nil {
+		apierrors.WriteHTTPError(response, apierrors.ErrInvalidRequestBody)
+		return
 	}
-}
-
-
-func (handler *DocumentHandler) notifyUsers(documentId string) {
-	handler.Mutex.RLock()
-	defer handler.Mutex.RUnlock()
-
-	users := make([]*models.BaseUserModel, 0, len(handler.Connections[documentId]))
-
-	for _, user := range handler.Connections[documentId] {
-		users = append(users, &user)
+	documentId, documentIdErr := strconv.Atoi(request.PathValue("documentId"))
+	if documentIdErr != nil {
+	    apierrors.WriteHTTPError(response, apierrors.ErrInvalidRequestBody)
+		return
 	}
 
-	handler.Socket.BroadcastToRoom("/", "doc_" + documentId, "users_update", users)
-}
+	if err := handler.DocumentService.CheckDocumentAccess(request.Context(), user.Id, documentId); err != nil {
+		apierrors.WriteHTTPError(response, err)
+		return
+	}
 
-
-func (handler *DocumentHandler) HandleConnect(s socketio.Conn) error {
-	s.SetContext("")
-	return nil
-}
-
-
-func (handler *DocumentHandler) HandleJoinDocument(s socketio.Conn, documentId string, user *models.BaseUserModel) {
-	convDocumentId, err := strconv.Atoi(documentId)
+	comments, err := handler.CommentService.GetCommentsReplies(request.Context(), commentId)
 	if err != nil {
-		s.Emit("error", "invalid documentId")
+		apierrors.WriteHTTPError(response, err)
 		return
 	}
 
-	_, dbErr := handler.Service.GetDocumentById(context.Background(), convDocumentId, user.Id)
-	if dbErr != nil {
-		s.Emit("error", dbErr.Error())
-		return
-	}
-
-	s.Join("doc_" + documentId)
-
-	handler.Mutex.Lock()
-	if handler.Connections[documentId] == nil {
-		handler.Connections[documentId] = make(map[string]models.BaseUserModel)
-	}
-	handler.Connections[documentId][s.ID()] = *user
-	handler.Mutex.Unlock()
-
-	document, _ := handler.Service.GetDocumentById(context.Background(), convDocumentId, user.Id)
-	s.Emit("document_state", document)
-
-	handler.notifyUsers(documentId)
-}
-
-
-func (handler *DocumentHandler) HandleDocumentUpdate(s socketio.Conn, data string, user *models.BaseUserModel) {
-	var update models.UpdateDocumentContent
-
-	if err := json.Unmarshal([]byte(data), &update); err != nil {
-		s.Emit("error", apierrors.ErrEncodingError.Error())
-		return 
-	}
-
-	_, err := strconv.Atoi(update.DocumentId)
-	if err != nil {
-		s.Emit("error", "invalid documentId")
-		return
-	}
-
-	document, updateErr := handler.Service.UpdateDocumentContent(context.Background(), user.Id, update.DocumentId, update.Content)
-	if updateErr != nil {
-		s.Emit("error", updateErr.Error())
-		return
-	}
-
-	s.Emit("document_updated", document)
-
-}
-
-
-func (handler *DocumentHandler) HandlerCursorMove(s socketio.Conn, data string, user *models.BaseUserModel) {
-	var move models.CursorMove
-
-	if err := json.Unmarshal([]byte(data), &move); err != nil {
-		s.Emit("error", apierrors.ErrEncodingError.Error())
-		return
-	}
-
-	handler.Socket.BroadcastToRoom("/", "doc_" + move.DocumentId, "cursor_move", move.Position)
-}
-
-
-func (handler *DocumentHandler) HandleDisconnect(s socketio.Conn, reason string) {
-	handler.Mutex.Lock()
-	defer handler.Mutex.Unlock()
-
-	for documentId, users := range handler.Connections {
-		if _, exists := users[s.ID()]; exists {
-			delete(handler.Connections[documentId], s.ID())
-			go handler.notifyUsers(documentId)
-		}
-	}
-}
-
-
-func (handler *DocumentHandler) SetupSocket(server *socketio.Server, d *deps.AuthDependency) {
-	handler.Socket.OnConnect("/", d.ProtectConnect(handler.HandleConnect))
-	handler.Socket.OnEvent("/", "join", d.ProtectEvent(handler.HandleJoinDocument))
-	handler.Socket.OnEvent("/", "update", d.ProtectEvent(handler.HandleDocumentUpdate))
-	handler.Socket.OnEvent("/", "cursor_move", d.ProtectEvent(handler.HandlerCursorMove))
-	handler.Socket.OnDisconnect("/", handler.HandleDisconnect)
+	utils.WriteJSONResponse(response, http.StatusOK, comments)
 }
 
 
@@ -214,14 +248,13 @@ func (handler *DocumentHandler) SetupRoutes(server *http.ServeMux, baseUrl strin
 	server.HandleFunc("POST " + baseUrl+ "/documents", d.Protected(handler.CreateDocument))
 	server.HandleFunc("PUT " + baseUrl+ "/documents", d.Protected(handler.UpdateDocument))
 	server.HandleFunc("DELETE " + baseUrl+ "/documents", d.Protected(handler.DeleteDocument))
+	server.HandleFunc("POST " + baseUrl+ "/documents/{id}/invite", d.Protected(handler.SendInvite))
+	server.HandleFunc("POST " + baseUrl+ "/documents/{id}/snapshot", d.Protected(handler.AddDocumentSnapshot))
+
+	server.HandleFunc("POST " + baseUrl+ "/documents/{id}/comments", d.Protected(handler.AddComment))
+	server.HandleFunc("GET " + baseUrl+ "/documents/{id}/comments", d.Protected(handler.GetComments))
+	server.HandleFunc("GET " + baseUrl+ "/documents/{id}/comments/{commentId}", d.Protected(handler.GetCommentsReplies))
+	server.HandleFunc("PUT " + baseUrl+ "/documents/{documentId}/comments/{commentId}", d.Protected(handler.UpdateComment))
+	server.HandleFunc("DELETE " + baseUrl+ "/documents/{id}/comments/{commentId}", d.Protected(handler.DeleteComment))
 	server.Handle(baseUrl + "documents/ws/{id}", handler.Socket)
-}
-
-
-func (handler *DocumentHandler) RunWebsocket() {
-	go func() {
-		if err := handler.Socket.Serve(); err != nil {
-			log.Printf("Socket.IO error: %v", err)
-		}
-	}()
 }

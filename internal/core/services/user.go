@@ -17,7 +17,7 @@ type UserService struct {
 
 
 
-func (s *UserService) GetUserById(ctx context.Context, userId int) (*models.UserModel, *apierrors.APIError) {
+func (s *UserService) GetUserById(ctx context.Context, userId int) (*models.BaseUserModel, *apierrors.APIError) {
 	user, err := s.Repository.GetUserById(ctx, userId)
 	if err != nil {
 		return nil, apierrors.CheckDBError(err, "user") 
@@ -26,7 +26,7 @@ func (s *UserService) GetUserById(ctx context.Context, userId int) (*models.User
 }
 
 
-func (s *UserService) UpdateUser(ctx context.Context, userId int, userForm io.ReadCloser) (*models.UserModel, *apierrors.APIError) {
+func (s *UserService) UpdateUser(ctx context.Context, userId int, userForm io.ReadCloser) (*models.BaseUserModel, *apierrors.APIError) {
 	var userFormEncoded models.UpdateUserModel
 
 	if err := json.NewDecoder(userForm).Decode(&userFormEncoded); err != nil {

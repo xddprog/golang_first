@@ -51,3 +51,11 @@ type DocumentModel struct {
 	Owner	  BaseUserModel 	`json:"owner"`
 	Members   []BaseUserModel 	`json:"members"`
 }
+
+
+type BaseSnapshotModel struct {
+	Id        int       	`json:"id"`
+	DocumentId int       	`json:"documentId"`
+	UserId   int       		`json:"userId"`
+	CreatedAt time.Time 	`json:"createdAt"`
+}

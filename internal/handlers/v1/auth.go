@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
 	"golang/internal/core/services"
 	"golang/internal/handlers/dependencies"
 	"golang/internal/infrastructure/errors"
+	"golang/internal/utils"
 	"net/http"
 	"strings"
 )
@@ -24,10 +24,7 @@ func (handler *AuthHandler) RegisterUser(response http.ResponseWriter, request *
 		return
 	}
 
-	response.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(response).Encode(user); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
+	utils.WriteJSONResponse(response, http.StatusCreated, user)
 }
 
 
@@ -43,9 +40,7 @@ func (handler *AuthHandler) GetCurrentUser(response http.ResponseWriter, request
 		return
 	}
 	
-	if err := json.NewEncoder(response).Encode(user); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
+	utils.WriteJSONResponse(response, http.StatusOK, user)
 }
 
 
@@ -62,9 +57,7 @@ func (handler *AuthHandler) RefreshToken(response http.ResponseWriter, request *
 		return 
 	}
 
-	if err := json.NewEncoder(response).Encode(user); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
+	utils.WriteJSONResponse(response, http.StatusOK, user)
 }
 
 
@@ -77,10 +70,7 @@ func (handler *AuthHandler) LoginUser(response http.ResponseWriter, request *htt
 		return
 	}
 
-	response.WriteHeader(http.StatusAccepted)
-	if err := json.NewEncoder(response).Encode(user); err != nil {
-		apierrors.WriteHTTPError(response, apierrors.ErrEncodingError)
-	}
+	utils.WriteJSONResponse(response, http.StatusOK, user)
 }
 
 

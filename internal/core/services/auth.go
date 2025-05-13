@@ -131,7 +131,7 @@ func (s *AuthService) createToken(userId int, tokenType string) (string, *apierr
 }
 
 
-func (s *AuthService) ValidateToken(ctx context.Context, tokenString string) (*models.UserModel, *apierrors.APIError) {
+func (s *AuthService) ValidateToken(ctx context.Context, tokenString string) (*models.BaseUserModel, *apierrors.APIError) {
     if tokenString == "" {
         return nil, &apierrors.ErrInvalidToken
     }
@@ -214,6 +214,10 @@ func (s *AuthService) LoginUser(ctx context.Context, userForm io.ReadCloser) (*m
 
     return &models.AuthResponseModel{
         TokenPair: *tokenPair,
-        User:      *user,
+        User:      models.BaseUserModel{
+            Id: user.Id, 
+            Email: user.Email, 
+            Username: user.Username,
+        },
     }, nil
 }

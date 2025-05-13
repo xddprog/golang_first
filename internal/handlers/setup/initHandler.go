@@ -17,9 +17,13 @@ import (
 func InitNewHandler[T types.HandlerInterface](emptyHandler T, db *pgxpool.Pool) (T, error) {
 	switch h := any(emptyHandler).(type) {
 	case *handlers.UserHandler:
-		repository := &repositories.UserRepository{DB: db}
-		service := &services.UserService{Repository: repository}
-		*h = handlers.UserHandler{Service: service}
+		userRepository := &repositories.UserRepository{DB: db}
+		documentRepository := &repositories.DocumentRepository{DB: db}
+
+		userService := &services.UserService{Repository: userRepository}
+		documentService := &services.DocumentService{Repository: documentRepository}
+		
+		*h = handlers.UserHandler{UserService: userService, DocumentService: documentService}
 		return any(h).(T), nil
 		
 	case *handlers.AuthHandler:		
@@ -34,11 +38,16 @@ func InitNewHandler[T types.HandlerInterface](emptyHandler T, db *pgxpool.Pool) 
 		return any(h).(T), nil
 
 	case *handlers.DocumentHandler:
-		repository := &repositories.DocumentRepository{DB: db}
-		service := &services.DocumentService{Repository: repository}
+		documentRepository := &repositories.DocumentRepository{DB: db}
+		commentRepository := &repositories.CommentRepository{DB: db}
+
+		documentService := &services.DocumentService{Repository: documentRepository}
+		commentService := &services.CommentService{Repository: commentRepository}
+		
 		socket := socketio.NewServer(nil)
 		*h = handlers.DocumentHandler{
-			Service: service, 
+			DocumentService: documentService, 
+			CommentService: commentService,
 			Socket: socket, 
 			Connections: make(map[string]map[string]models.BaseUserModel),
 		}

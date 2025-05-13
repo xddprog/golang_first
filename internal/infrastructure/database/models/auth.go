@@ -8,7 +8,7 @@ type TokenPair struct {
 
 type AuthResponseModel struct {
 	TokenPair
-	User UserModel `json:"user"`
+	User BaseUserModel `json:"user"`
 }
 
 

@@ -16,8 +16,8 @@ type UserRepository struct {
 func (repo *UserRepository) GetUserByEmail(ctx context.Context, value string) (*models.UserModel, error) {
 	var user models.UserModel
 
-	err := repo.DB.QueryRow(ctx, "SELECT id, username, email FROM users WHERE email = $1", value).Scan(
-		&user.Id, &user.Username, &user.Email,
+	err := repo.DB.QueryRow(ctx, "SELECT id, username, email, password FROM users WHERE email = $1", value).Scan(
+		&user.Id, &user.Username, &user.Email, &user.Password,
 	)
 
 	if err != nil {
@@ -26,8 +26,8 @@ func (repo *UserRepository) GetUserByEmail(ctx context.Context, value string) (*
 	return &user, nil
 }
 
-func (repo *UserRepository) GetUserById(ctx context.Context, userId int) (*models.UserModel, error) {
-	var user models.UserModel
+func (repo *UserRepository) GetUserById(ctx context.Context, userId int) (*models.BaseUserModel, error) {
+	var user models.BaseUserModel
 
 	err := repo.DB.QueryRow(ctx, "SELECT id, username, email FROM users WHERE id = $1", userId).Scan(
 		&user.Id, &user.Username, &user.Email,
@@ -40,8 +40,8 @@ func (repo *UserRepository) GetUserById(ctx context.Context, userId int) (*model
 	return &user, nil
 }
 
-func (repo *UserRepository) CreateUser(ctx context.Context, userForm models.RegisterUserModel) (*models.UserModel, error) {
-	var user models.UserModel
+func (repo *UserRepository) CreateUser(ctx context.Context, userForm models.RegisterUserModel) (*models.BaseUserModel, error) {
+	var user models.BaseUserModel
 	
 	err := repo.DB.QueryRow(
 		ctx,
@@ -56,8 +56,8 @@ func (repo *UserRepository) CreateUser(ctx context.Context, userForm models.Regi
 }
 
 
-func (repo *UserRepository) UpdateUser(ctx context.Context, userId int, userForm models.UpdateUserModel) (*models.UserModel, error) {
-	var user models.UserModel
+func (repo *UserRepository) UpdateUser(ctx context.Context, userId int, userForm models.UpdateUserModel) (*models.BaseUserModel, error) {
+	var user models.BaseUserModel
 
 	err := repo.DB.QueryRow(
 		ctx,

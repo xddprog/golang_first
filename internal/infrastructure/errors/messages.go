@@ -38,7 +38,6 @@ var (
 	ErrInvalidToken = APIError{Code: http.StatusUnauthorized, Message: "invalid token"}
 	ErrInvaliLoginData = APIError{Code: http.StatusUnauthorized, Message: "invalid login data"}
 	ErrDocumentAccessDenied = APIError{Code: http.StatusForbidden, Message: "access to document denied"}
-	ErrDocumentNotFound = APIError{Code: http.StatusNotFound, Message: "document not found"}
 )
 
 

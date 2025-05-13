@@ -14,15 +14,26 @@ import (
 	"time"
 )
 
-
 type DocumentService struct {
-	Repository *repositories.DocumentRepository
-	RedisClient      *clients.RedisClient
-	SMTPClient       *clients.SmtpClient
+	Repository  *repositories.DocumentRepository
+	RedisClient *clients.RedisClient
+	SMTPClient  *clients.SmtpClient
 }
 
 
-func (s *DocumentService) CreateDocument(ctx context.Context, userId int, documentForm io.ReadCloser) (*models.BaseDocumentModel, *apierrors.APIError) {
+func (s *DocumentService) CheckDocumentAccess(ctx context.Context, userId int, documentId int) *apierrors.APIError {
+	_, err := s.Repository.CheckDocumentAccess(ctx, userId, documentId)
+	if err != nil {
+		return &apierrors.ErrDocumentAccessDenied
+	}
+	return nil
+}
+
+func (s *DocumentService) CreateDocument(
+	ctx context.Context,
+	userId int,
+	documentForm io.ReadCloser,
+) (*models.BaseDocumentModel, *apierrors.APIError) {
 	var documentFormEncoded models.CreateDocumentModel
 
 	if err := json.NewDecoder(documentForm).Decode(&documentFormEncoded); err != nil {
@@ -40,10 +51,9 @@ func (s *DocumentService) CreateDocument(ctx context.Context, userId int, docume
 	return document, nil
 }
 
-
 func (s *DocumentService) GetDocumentById(
-	ctx context.Context, 
-	documentId int, 
+	ctx context.Context,
+	documentId int,
 	userId int,
 ) (*models.DocumentModel, *apierrors.APIError) {
 	_, err := s.Repository.CheckDocumentAccess(ctx, userId, documentId)
@@ -58,8 +68,12 @@ func (s *DocumentService) GetDocumentById(
 	return document, nil
 }
 
-
-func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, documentId int, documentForm io.ReadCloser) (*models.BaseDocumentModel, *apierrors.APIError) {
+func (s *DocumentService) UpdateDocument(
+	ctx context.Context,
+	userId int,
+	documentId int,
+	documentForm io.ReadCloser,
+) (*models.BaseDocumentModel, *apierrors.APIError) {
 	var documentFormEncoded models.UpdateDocumentModel
 
 	if err := json.NewDecoder(documentForm).Decode(&documentFormEncoded); err != nil {
@@ -77,7 +91,6 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, userId int, docume
 	return document, nil
 }
 
-
 func (s *DocumentService) DeleteDocument(ctx context.Context, documentId int, userId int) *apierrors.APIError {
 	err := s.Repository.DeleteDocument(ctx, documentId, userId)
 	if err != nil {
@@ -86,9 +99,8 @@ func (s *DocumentService) DeleteDocument(ctx context.Context, documentId int, us
 	return nil
 }
 
-
 func (s *DocumentService) UpdateDocumentContent(
-	ctx context.Context, 
+	ctx context.Context,
 	userId int,
 	documentId string,
 	content string,
@@ -105,21 +117,24 @@ func (s *DocumentService) UpdateDocumentContent(
 	return document, nil
 }
 
-
 func (s *DocumentService) SendInvite(
-	ctx context.Context, 
-	userId int, 
+	ctx context.Context,
+	userId int,
 	userEmail string,
 	documentId int,
 ) *apierrors.APIError {
-key := fmt.Sprintf("document:%d:user:%d:invite", documentId, userId)
+	if _, err := s.Repository.CheckIsOwner(ctx, userId, documentId); err != nil {
+		return &apierrors.ErrDocumentAccessDenied
+	}
+
+	key := fmt.Sprintf("document:%d:user:%d:invite", documentId, userId)
 	code := utils.RandSeq(6)
 	err := s.RedisClient.Set(ctx, key, code, time.Hour*24)
 	if err != nil {
 		return &apierrors.ErrInvalidRequestBody
 	}
 
-	redisErr := s.RedisClient.Set(ctx, key, code, time.Hour * 24 )
+	redisErr := s.RedisClient.Set(ctx, key, code, time.Hour*24)
 	if redisErr != nil {
 		return &apierrors.ErrInternalServerError
 	}
@@ -130,14 +145,39 @@ key := fmt.Sprintf("document:%d:user:%d:invite", documentId, userId)
 	}
 
 	smtpErr := s.SMTPClient.SendInviteToDocument(
-		userEmail, 
-		"Invite to Document", 
-		code, 
-		strconv.Itoa(documentId), 
+		userEmail,
+		"Invite to Document",
+		code,
+		strconv.Itoa(documentId),
 		document.Title,
 	)
 	if smtpErr != nil {
 		return &apierrors.ErrInternalServerError
 	}
 	return nil
+}
+
+func (s *DocumentService) GetUserDocuments(
+	ctx context.Context,
+	userId int,
+	limit int,
+	offset int,
+) ([]*models.BaseDocumentModel, *apierrors.APIError) {
+	documents, err := s.Repository.GetUserDocuments(ctx, userId, limit, offset)
+	if err != nil {
+		return nil, apierrors.CheckDBError(err, "document")
+	}
+	return documents, nil
+}
+
+func (s *DocumentService) AddDocumentSnapshot(
+	ctx context.Context,
+	userId int,
+	documentId int,
+) (*models.BaseSnapshotModel, *apierrors.APIError) {
+	snapshot, err := s.Repository.AddDocumentSnapshot(ctx, userId, documentId)
+	if err != nil {
+		return nil, apierrors.CheckDBError(err, "document")
+	}
+	return snapshot, nil
 }
